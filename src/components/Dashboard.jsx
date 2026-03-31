@@ -101,15 +101,21 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
         const base64 = reader.result.split(',')[1]; // Remove data:...;base64, prefix
 
         try {
-          // Call extraction API
+          // Get auth token for secure API call
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+
+          // Call extraction API with auth
           const response = await fetch('/api/extract', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
             body: JSON.stringify({
               fileBase64: base64,
               fileType: file.type,
               fileName: file.name,
-              userId: user.id,
               documentId: docId,
             }),
           });
@@ -170,14 +176,16 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
 
   const handleUpgrade = async (planId) => {
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       const response = await fetch('/api/create-checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planId,
-          userId: user.id,
-          userEmail: user.email,
-        }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ planId }),
       });
       const result = await response.json();
       if (result.url) {

@@ -1,5 +1,6 @@
 // Vercel Serverless Function: POST /api/stripe-webhook
 // Handles Stripe webhook events for subscription changes
+// SECURED: verifies Stripe webhook signature, no user auth needed (server-to-server)
 
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
@@ -11,11 +12,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
 );
 
-// Disable body parsing so we can verify the webhook signature
 export const config = {
-  api: {
-    bodyParser: false,
-  },
+  api: { bodyParser: false },
 };
 
 async function buffer(readable) {
@@ -27,6 +25,7 @@ async function buffer(readable) {
 }
 
 export default async function handler(req, res) {
+  // No CORS needed — this is called by Stripe servers only
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -37,12 +36,15 @@ export default async function handler(req, res) {
     const buf = await buffer(req);
     const sig = req.headers['stripe-signature'];
 
-    // If we have a webhook secret, verify the signature
-    if (process.env.STRIPE_WEBHOOK_SECRET) {
+    if (process.env.STRIPE_WEBHOOK_SECRET && sig) {
+      // VERIFY Stripe signature — this proves the request came from Stripe
       event = stripe.webhooks.constructEvent(buf, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    } else {
-      // For development without webhook secret
+    } else if (process.env.NODE_ENV === 'development' || !process.env.STRIPE_WEBHOOK_SECRET) {
+      // Development fallback — log a warning
+      console.warn('WARNING: No STRIPE_WEBHOOK_SECRET set. Webhook signature not verified.');
       event = JSON.parse(buf.toString());
+    } else {
+      return res.status(400).json({ error: 'Missing stripe-signature header' });
     }
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message);
@@ -56,17 +58,27 @@ export default async function handler(req, res) {
         const userId = session.metadata?.userId;
         const planId = session.metadata?.planId;
 
-        if (userId && planId) {
-          await supabase
-            .from('profiles')
-            .update({
-              plan: planId,
-              stripe_customer_id: session.customer,
-              docs_used_this_month: 0,
-              billing_cycle_start: new Date().toISOString(),
-            })
-            .eq('id', userId);
+        // Validate metadata exists
+        if (!userId || !planId) {
+          console.error('Webhook: missing userId or planId in session metadata');
+          break;
         }
+
+        // Validate planId is a real plan
+        if (!['pro', 'business'].includes(planId)) {
+          console.error('Webhook: invalid planId:', planId);
+          break;
+        }
+
+        await supabase
+          .from('profiles')
+          .update({
+            plan: planId,
+            stripe_customer_id: session.customer,
+            docs_used_this_month: 0,
+            billing_cycle_start: new Date().toISOString(),
+          })
+          .eq('id', userId);
         break;
       }
 
@@ -74,11 +86,12 @@ export default async function handler(req, res) {
         const subscription = event.data.object;
         const customerId = subscription.customer;
 
-        // Downgrade to demo when subscription is canceled
-        await supabase
-          .from('profiles')
-          .update({ plan: 'demo', demo_remaining: 0 })
-          .eq('stripe_customer_id', customerId);
+        if (customerId) {
+          await supabase
+            .from('profiles')
+            .update({ plan: 'demo', demo_remaining: 0 })
+            .eq('stripe_customer_id', customerId);
+        }
         break;
       }
 
@@ -86,8 +99,7 @@ export default async function handler(req, res) {
         const invoice = event.data.object;
         const customerId = invoice.customer;
 
-        // Reset monthly usage on successful payment
-        if (invoice.billing_reason === 'subscription_cycle') {
+        if (invoice.billing_reason === 'subscription_cycle' && customerId) {
           await supabase
             .from('profiles')
             .update({
@@ -100,8 +112,7 @@ export default async function handler(req, res) {
       }
 
       case 'invoice.payment_failed': {
-        const invoice = event.data.object;
-        console.error('Payment failed for customer:', invoice.customer);
+        console.error('Payment failed for customer:', event.data.object.customer);
         break;
       }
     }

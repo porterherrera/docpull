@@ -1,15 +1,15 @@
 // Vercel Serverless Function: POST /api/extract
 // Receives a base64-encoded document image, sends to Claude Vision, returns structured data
+// SECURED: requires valid Supabase JWT, enforces plan limits, validates input
 
 import Anthropic from '@anthropic-ai/sdk';
-import { createClient } from '@supabase/supabase-js';
+import { setCorsHeaders, verifyAuth, getSupabaseAdmin } from './_auth.js';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
-);
+const PLAN_LIMITS = { demo: 1, pro: 100, business: 500 };
+const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB base64 limit
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
 
 const EXTRACTION_PROMPT = `You are an expert document data extraction AI. Analyze this invoice/receipt image and extract ALL data into a structured JSON format.
 
@@ -42,84 +42,95 @@ Return ONLY valid JSON with this exact structure (no markdown, no explanation):
 Be precise with numbers. If a field is not present in the document, use null. Always return valid JSON.`;
 
 export default async function handler(req, res) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  // CORS
+  if (setCorsHeaders(req, res)) return;
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  try {
-    const { fileBase64, fileType, fileName, userId, documentId } = req.body;
+  // AUTH — verify the user's JWT token
+  const user = await verifyAuth(req, res);
+  if (!user) return; // 401 already sent
 
-    if (!fileBase64 || !userId) {
-      return res.status(400).json({ error: 'Missing fileBase64 or userId' });
+  const supabase = getSupabaseAdmin();
+
+  try {
+    const { fileBase64, fileType, fileName, documentId } = req.body;
+
+    // INPUT VALIDATION
+    if (!fileBase64) {
+      return res.status(400).json({ error: 'Missing fileBase64' });
     }
 
-    // Determine media type
+    if (!fileName || typeof fileName !== 'string' || fileName.length > 255) {
+      return res.status(400).json({ error: 'Invalid fileName' });
+    }
+
+    if (fileBase64.length > MAX_FILE_SIZE) {
+      return res.status(400).json({ error: 'File too large. Maximum 4MB.' });
+    }
+
     const mediaType = fileType || 'image/png';
-    const supportedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    if (!ALLOWED_TYPES.includes(mediaType)) {
+      return res.status(400).json({ error: 'Unsupported file type. Use JPEG, PNG, WebP, GIF, or PDF.' });
+    }
 
-    // For PDFs, we'll convert the first page approach or handle differently
-    const isImage = mediaType.startsWith('image/');
+    // PLAN LIMIT CHECK — use the authenticated user's ID, not a user-supplied one
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('plan, demo_remaining, docs_used_this_month')
+      .eq('id', user.id)
+      .single();
 
-    // Build the Claude message
+    if (profileError || !profile) {
+      return res.status(403).json({ error: 'Profile not found' });
+    }
+
+    const limit = PLAN_LIMITS[profile.plan] || 1;
+
+    if (profile.plan === 'demo') {
+      if (profile.demo_remaining <= 0) {
+        return res.status(403).json({ error: 'Free extraction used. Please upgrade to continue.' });
+      }
+    } else {
+      if ((profile.docs_used_this_month || 0) >= limit) {
+        return res.status(403).json({ error: `Monthly limit of ${limit} documents reached. Please upgrade or wait for next billing cycle.` });
+      }
+    }
+
+    // Build Claude message
     const messageContent = [];
 
     if (mediaType === 'application/pdf') {
       messageContent.push({
         type: 'document',
-        source: {
-          type: 'base64',
-          media_type: 'application/pdf',
-          data: fileBase64,
-        },
+        source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 },
       });
     } else {
       messageContent.push({
         type: 'image',
-        source: {
-          type: 'base64',
-          media_type: mediaType,
-          data: fileBase64,
-        },
+        source: { type: 'base64', media_type: mediaType, data: fileBase64 },
       });
     }
 
-    messageContent.push({
-      type: 'text',
-      text: EXTRACTION_PROMPT,
-    });
+    messageContent.push({ type: 'text', text: EXTRACTION_PROMPT });
 
     // Call Claude Vision
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: messageContent,
-        },
-      ],
+      messages: [{ role: 'user', content: messageContent }],
     });
 
     // Parse the response
     const responseText = response.content[0].text;
-
-    // Try to parse JSON from the response
     let extractedData;
+
     try {
-      // Handle case where Claude wraps JSON in markdown code blocks
       const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, responseText];
       extractedData = JSON.parse(jsonMatch[1].trim());
-    } catch (parseError) {
-      // If parsing fails, try to extract JSON object directly
+    } catch {
       const jsonStart = responseText.indexOf('{');
       const jsonEnd = responseText.lastIndexOf('}');
       if (jsonStart !== -1 && jsonEnd !== -1) {
@@ -129,7 +140,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Calculate a confidence score based on how many fields were extracted
+    // Confidence score
     const fields = ['vendor', 'invoiceNumber', 'date', 'total', 'lineItems'];
     const filledFields = fields.filter((f) => {
       const val = extractedData[f];
@@ -137,50 +148,40 @@ export default async function handler(req, res) {
     });
     const confidence = Math.round((filledFields.length / fields.length) * 100);
 
-    // Update the document in Supabase if documentId provided
+    // Update document in Supabase — use authenticated user.id for the query
     if (documentId) {
-      await supabase
+      // Verify the document belongs to this user before updating
+      const { data: existingDoc } = await supabase
         .from('documents')
-        .update({
-          status: 'completed',
-          extracted_data: extractedData,
-          confidence: confidence,
-        })
-        .eq('id', documentId);
-
-      // Decrement demo_remaining or increment docs_used
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('plan, demo_remaining, docs_used_this_month')
-        .eq('id', userId)
+        .select('user_id')
+        .eq('id', documentId)
         .single();
 
-      if (profile) {
-        if (profile.plan === 'demo' && profile.demo_remaining > 0) {
-          await supabase
-            .from('profiles')
-            .update({ demo_remaining: profile.demo_remaining - 1 })
-            .eq('id', userId);
-        } else {
-          await supabase
-            .from('profiles')
-            .update({ docs_used_this_month: (profile.docs_used_this_month || 0) + 1 })
-            .eq('id', userId);
-        }
+      if (existingDoc && existingDoc.user_id === user.id) {
+        await supabase
+          .from('documents')
+          .update({ status: 'completed', extracted_data: extractedData, confidence })
+          .eq('id', documentId)
+          .eq('user_id', user.id); // double-check ownership
       }
     }
 
-    return res.status(200).json({
-      success: true,
-      data: extractedData,
-      confidence,
-      fileName,
-    });
+    // Update usage — always use authenticated user.id
+    if (profile.plan === 'demo') {
+      await supabase
+        .from('profiles')
+        .update({ demo_remaining: Math.max(0, profile.demo_remaining - 1) })
+        .eq('id', user.id);
+    } else {
+      await supabase
+        .from('profiles')
+        .update({ docs_used_this_month: (profile.docs_used_this_month || 0) + 1 })
+        .eq('id', user.id);
+    }
+
+    return res.status(200).json({ success: true, data: extractedData, confidence, fileName });
   } catch (error) {
     console.error('Extraction error:', error);
-    return res.status(500).json({
-      error: 'Extraction failed',
-      message: error.message,
-    });
+    return res.status(500).json({ error: 'Extraction failed', message: error.message });
   }
 }
