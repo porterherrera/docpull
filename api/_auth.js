@@ -9,9 +9,11 @@ const supabase = createClient(
 );
 
 const ALLOWED_ORIGINS = [
+  'https://documentpull.com',
+  'https://www.documentpull.com',
   'https://docpull-psi.vercel.app',
   'https://docpull.vercel.app',
-  'http://localhost:5173', // local dev
+  'http://localhost:5173',
   'http://localhost:3000',
 ];
 
