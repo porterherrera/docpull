@@ -1,21 +1,51 @@
 import { useState } from 'react';
-import { FileText, Check, Shield } from 'lucide-react';
+import { FileText, Check, Shield, AlertCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase.js';
 import './AuthScreen.css';
 
 export default function AuthScreen({ onAuth, isLogin, onToggle }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onAuth({
-      name: name || email.split('@')[0],
-      email,
-      plan: 'Pro',
-      demoUsed: false,
-      demoRemaining: 1,
-    });
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (isLogin) {
+        // Sign in
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInError) throw signInError;
+        onAuth(data.user);
+      } else {
+        // Sign up
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              name: name || email.split('@')[0],
+            },
+          },
+        });
+        if (signUpError) throw signUpError;
+
+        if (data.user) {
+          onAuth(data.user);
+        }
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -41,6 +71,13 @@ export default function AuthScreen({ onAuth, isLogin, onToggle }) {
               <Check size={14} /> 1 free extraction included — no credit card needed
             </div>
           )}
+
+          {error && (
+            <div className="auth-error">
+              <AlertCircle size={14} /> {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit}>
             {!isLogin && (
               <div className="auth-field">
@@ -73,10 +110,16 @@ export default function AuthScreen({ onAuth, isLogin, onToggle }) {
                 type="password"
                 placeholder="••••••••"
                 required
+                minLength={6}
               />
             </div>
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px' }}>
-              {isLogin ? 'Log In' : 'Create Account & Try Free'}
+            <button
+              type="submit"
+              className="btn btn-primary"
+              style={{ width: '100%', padding: '12px' }}
+              disabled={loading}
+            >
+              {loading ? 'Please wait...' : isLogin ? 'Log In' : 'Create Account & Try Free'}
             </button>
           </form>
 

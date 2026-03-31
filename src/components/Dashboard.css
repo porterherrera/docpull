@@ -154,12 +154,28 @@
 
 .upload-zone:hover { border-color: var(--primary-border); background: var(--primary-bg); }
 .upload-zone.active { border-color: var(--primary); background: var(--primary-bg); }
+.upload-zone.disabled { opacity: 0.7; cursor: pointer; }
 
 .upload-zone-icon { color: var(--text-muted); margin: 0 auto 14px; display: block; }
 .upload-zone.active .upload-zone-icon { color: var(--primary); }
 
 .upload-zone-title { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
 .upload-zone-sub { font-size: 14px; color: var(--text-muted); }
+
+.usage-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--warning-bg);
+  border: 1px solid #FCD34D;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.doc-status-icon.failed { background: #FEF2F2; color: #DC2626; }
 
 /* -- Document list -- */
 .recent-title { font-size: 15px; font-weight: 700; margin-bottom: 14px; }

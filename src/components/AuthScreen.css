@@ -43,6 +43,20 @@
 
 .auth-toggle-link:hover { text-decoration: underline; }
 
+.auth-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #DC2626;
+}
+
 .auth-demo-badge {
   display: flex;
   align-items: center;
