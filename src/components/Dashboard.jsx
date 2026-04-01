@@ -4,6 +4,7 @@ import {
   LogOut, Eye, Trash2, Check, RefreshCw, X,
   Clock, BarChart3, DollarSign, AlertCircle, Lock, CreditCard,
   CheckCircle, XCircle, Loader2, Files, Zap, TrendingUp,
+  Menu, Search, RotateCcw,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
 import { exportToExcel, exportToCSV, exportAllToExcel } from '../export.js';
@@ -18,6 +19,10 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
   const [dragActive, setDragActive] = useState(false);
   const [upgradeModal, setUpgradeModal] = useState(false);
   const [batchProgress, setBatchProgress] = useState(null); // { total, completed, failed, current }
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [toast, setToast] = useState(null); // { message, type }
+  const [loading, setLoading] = useState(true);
   const fileInputRef = useRef(null);
 
   const plan = profile?.plan || 'demo';
@@ -46,6 +51,11 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
     }
   }, []);
 
+  function showToast(message, type = 'success') {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  }
+
   async function refreshProfile() {
     const { data: updatedProfile } = await supabase
       .from('profiles')
@@ -56,6 +66,7 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
   }
 
   async function loadDocuments() {
+    setLoading(true);
     const { data } = await supabase
       .from('documents')
       .select('*')
@@ -65,6 +76,7 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
     if (data) {
       setDocuments(data.map(mapDoc));
     }
+    setLoading(false);
   }
 
   function mapDoc(d) {
@@ -91,7 +103,7 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
 
     if (maxFiles < fileList.length) {
       // Can only process some files
-      alert(`You can only process ${remaining} more document${remaining !== 1 ? 's' : ''} on your current plan. Processing the first ${maxFiles}.`);
+      showToast(`Processing ${maxFiles} of ${fileList.length} files (plan limit: ${remaining} remaining)`, 'warning');
     }
 
     const filesToProcess = fileList.slice(0, maxFiles);
@@ -202,6 +214,12 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
     // Batch complete — refresh profile
     setBatchProgress(null);
     refreshProfile();
+    const successes = filesToProcess.length - (filesToProcess.length > 1 ? 0 : 0);
+    if (filesToProcess.length === 1) {
+      showToast('Document extracted successfully!');
+    } else {
+      showToast(`Batch complete! Processed ${filesToProcess.length} documents.`);
+    }
   }, [user?.id, canExtract, remaining]);
 
   function fileToBase64(file) {
@@ -224,6 +242,16 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
     await supabase.from('documents').delete().eq('id', id);
   };
 
+  const retryExtraction = async (docId, fileName) => {
+    // Mark as processing again
+    setDocuments((prev) => prev.map((d) => d.id === docId ? { ...d, status: 'processing' } : d));
+    await supabase.from('documents').update({ status: 'processing' }).eq('id', docId);
+
+    // Re-prompt the user to upload the file again via the file input
+    showToast('Please re-upload the file to retry extraction.', 'warning');
+    fileInputRef.current?.click();
+  };
+
   const handleUpgrade = async (planId) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -242,7 +270,7 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
         window.location.href = result.url;
       } else {
         console.error('No checkout URL:', result);
-        alert('Failed to start checkout. Please try again.');
+        showToast('Failed to start checkout. Please try again.', 'error');
       }
     } catch (err) {
       console.error('Checkout error:', err);
@@ -256,6 +284,14 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
     ? (completedDocs.reduce((s, d) => s + (d.extraction?.confidence || 0), 0) / completedDocs.length).toFixed(1)
     : null;
 
+  const filteredDocs = searchQuery
+    ? documents.filter((d) =>
+        d.fileName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (d.extraction?.vendor || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (d.extraction?.invoiceNumber || '').toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : documents;
+
   const displayName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'User';
   const displayPlan = plan === 'demo' ? 'Free Trial' : plan.charAt(0).toUpperCase() + plan.slice(1);
 
@@ -267,8 +303,11 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
 
   return (
     <div className="dash">
+      {/* Mobile overlay */}
+      {mobileMenuOpen && <div className="mobile-overlay" onClick={() => setMobileMenuOpen(false)} />}
+
       {/* Sidebar */}
-      <aside className="dash-sidebar">
+      <aside className={`dash-sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="dash-sidebar-logo" onClick={onGoLanding}>
           <div className="logo-icon" style={{ width: 30, height: 30, borderRadius: 7 }}>
             <FileText size={15} color="#fff" />
@@ -281,7 +320,7 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
             <div
               key={item.id}
               className={`dash-nav-item ${view === item.id ? 'active' : ''}`}
-              onClick={() => setView(item.id)}
+              onClick={() => { setView(item.id); setMobileMenuOpen(false); }}
             >
               {item.icon} {item.label}
             </div>
@@ -305,11 +344,16 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
       {/* Main content */}
       <main className="dash-main">
         <header className="dash-topbar">
-          <h1 className="dash-page-title">
-            {view === 'dashboard' && 'Dashboard'}
-            {view === 'history' && 'Documents'}
-            {view === 'settings' && 'Settings'}
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(true)}>
+              <Menu size={20} />
+            </button>
+            <h1 className="dash-page-title">
+              {view === 'dashboard' && 'Dashboard'}
+              {view === 'history' && 'Documents'}
+              {view === 'settings' && 'Settings'}
+            </h1>
+          </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {plan === 'demo' && (
               <button
@@ -433,14 +477,41 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
           {/* HISTORY */}
           {view === 'history' && (
             <>
-              {documents.length === 0 ? (
+              {documents.length > 0 && (
+                <div className="search-bar">
+                  <Search size={16} className="search-bar-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search by filename, vendor, or invoice #..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="search-bar-input"
+                  />
+                  {searchQuery && (
+                    <button className="search-bar-clear" onClick={() => setSearchQuery('')}><X size={14} /></button>
+                  )}
+                </div>
+              )}
+              {loading ? (
+                <div className="skeleton-list">
+                  {[1,2,3,4,5].map((i) => (
+                    <div key={i} className="skeleton-row">
+                      <div className="skeleton skeleton-icon" />
+                      <div style={{ flex: 1 }}>
+                        <div className="skeleton skeleton-text-lg" />
+                        <div className="skeleton skeleton-text-sm" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filteredDocs.length === 0 ? (
                 <div className="empty-state">
                   <FileText size={44} style={{ opacity: 0.25 }} />
-                  <p>No documents yet. Upload your first invoice to get started.</p>
+                  <p>{searchQuery ? 'No documents match your search.' : 'No documents yet. Upload your first invoice to get started.'}</p>
                 </div>
               ) : (
                 <div className="doc-list">
-                  {documents.map((doc) => (
+                  {filteredDocs.map((doc) => (
                     <DocRow
                       key={doc.id}
                       doc={doc}
@@ -448,6 +519,7 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
                       onExportExcel={() => exportToExcel(doc)}
                       onExportCSV={() => exportToCSV(doc)}
                       onDelete={() => deleteDoc(doc.id)}
+                      onRetry={() => retryExtraction(doc.id, doc.fileName)}
                     />
                   ))}
                 </div>
@@ -503,6 +575,17 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
           )}
         </div>
       </main>
+
+      {/* Toast notification */}
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.type === 'success' && <CheckCircle size={16} />}
+          {toast.type === 'error' && <XCircle size={16} />}
+          {toast.type === 'warning' && <AlertCircle size={16} />}
+          <span>{toast.message}</span>
+          <button className="toast-close" onClick={() => setToast(null)}><X size={14} /></button>
+        </div>
+      )}
 
       {/* Detail Modal */}
       {selectedDoc?.extraction && (
@@ -810,7 +893,7 @@ function AnalyticsChart({ documents }) {
   );
 }
 
-function DocRow({ doc, onView, onExportExcel, onExportCSV, onDelete }) {
+function DocRow({ doc, onView, onExportExcel, onExportCSV, onDelete, onRetry }) {
   const isProcessing = doc.status === 'processing';
   const isFailed = doc.status === 'failed';
 
@@ -829,7 +912,7 @@ function DocRow({ doc, onView, onExportExcel, onExportCSV, onDelete }) {
           {isProcessing
             ? 'Extracting data...'
             : isFailed
-              ? 'Extraction failed'
+              ? 'Extraction failed — click retry to try again'
               : doc.extraction
                 ? `${doc.extraction.vendor || 'Unknown'} · $${Number(doc.extraction.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} · ${doc.extraction.confidence}%`
                 : ''}
@@ -837,7 +920,12 @@ function DocRow({ doc, onView, onExportExcel, onExportCSV, onDelete }) {
       </div>
       <div className="doc-actions">
         {isProcessing && <span className="doc-processing-label">Processing...</span>}
-        {isFailed && <button className="btn btn-sm doc-btn delete" onClick={onDelete}><Trash2 size={12} /></button>}
+        {isFailed && (
+          <>
+            {onRetry && <button className="btn btn-sm doc-btn retry" onClick={onRetry}><RotateCcw size={12} /> Retry</button>}
+            <button className="btn btn-sm doc-btn delete" onClick={onDelete}><Trash2 size={12} /></button>
+          </>
+        )}
         {!isProcessing && !isFailed && doc.extraction && (
           <>
             <button className="btn btn-sm doc-btn view" onClick={onView}><Eye size={12} /> View</button>

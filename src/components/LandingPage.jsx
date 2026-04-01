@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   FileText, Upload, Download, Zap, Shield, Clock,
-  ArrowRight, Check, Star, Play, AlertTriangle, Lock, Users
+  ArrowRight, Check, Star, Play, AlertTriangle, Lock, Users,
+  ChevronDown, Globe, Layers, RefreshCw,
 } from 'lucide-react';
 import './LandingPage.css';
 
@@ -96,9 +97,52 @@ const STATS = [
   { value: "4,800+", label: "Happy Businesses" },
 ];
 
+const INTEGRATIONS = [
+  { name: "QuickBooks", color: "#2CA01C" },
+  { name: "Xero", color: "#13B5EA" },
+  { name: "FreshBooks", color: "#0075DD" },
+  { name: "Excel", color: "#217346" },
+  { name: "Google Sheets", color: "#0F9D58" },
+  { name: "CSV", color: "#6B7280" },
+  { name: "Wave", color: "#1C4587" },
+  { name: "Sage", color: "#00DC00" },
+];
+
+const FAQS = [
+  {
+    q: "What file formats do you support?",
+    a: "DocPull accepts PDF, JPG, JPEG, PNG, WEBP, and TIFF files. Whether it's a clean digital invoice, a phone photo of a receipt, or a scanned multi-page document, we handle it all.",
+  },
+  {
+    q: "How accurate is the extraction?",
+    a: "Our AI achieves 99%+ accuracy on standard invoices and receipts. For messy handwritten receipts or very low-quality scans, accuracy typically stays above 95%. Every extraction includes a confidence score so you always know.",
+  },
+  {
+    q: "Can I process multiple invoices at once?",
+    a: "Yes! Select multiple files at once or drag and drop a batch. Pro plans support up to 20 files per batch, and Business plans have no batch limit.",
+  },
+  {
+    q: "What data fields are extracted?",
+    a: "Vendor name, invoice number, date, due date, subtotal, tax, total, currency, line items (description, quantity, unit price, amount), and billing address. All fields are exported in your chosen format.",
+  },
+  {
+    q: "Is my data secure?",
+    a: "Absolutely. All documents are processed over encrypted connections and are never stored permanently. We use bank-grade AES-256 encryption and your files are automatically deleted after processing.",
+  },
+  {
+    q: "Can I cancel anytime?",
+    a: "Yes. No contracts, no cancellation fees. You can cancel your subscription at any time from your account settings and you'll retain access through the end of your billing period.",
+  },
+  {
+    q: "Do you integrate with my accounting software?",
+    a: "DocPull exports to Excel, CSV, and JSON formats that import directly into QuickBooks, Xero, FreshBooks, Wave, Sage, and virtually any accounting software. No plugins needed.",
+  },
+];
+
 export default function LandingPage({ onGetStarted, onLogin }) {
   const [activeTestimonial, setActiveTestimonial] = useState(0);
   const [spotsLeft] = useState(() => Math.floor(Math.random() * 6) + 7); // 7-12 spots
+  const [openFaq, setOpenFaq] = useState(null);
 
   useEffect(() => {
     const t = setInterval(() => setActiveTestimonial((p) => (p + 1) % TESTIMONIALS.length), 5000);
@@ -145,7 +189,7 @@ export default function LandingPage({ onGetStarted, onLogin }) {
               <Play size={16} /> See It In Action
             </button>
           </div>
-          <p className="hero-note">Create a free account · Try 1 document free · No credit card needed</p>
+          <p className="hero-note">3 free extractions · No credit card required · Setup in 30 seconds</p>
         </div>
 
         {/* Hero visual */}
@@ -155,7 +199,7 @@ export default function LandingPage({ onGetStarted, onLogin }) {
               <div className="dot dot-red" />
               <div className="dot dot-yellow" />
               <div className="dot dot-green" />
-              <span className="hero-visual-url">app.docpull.io</span>
+              <span className="hero-visual-url">documentpull.com</span>
             </div>
             <div className="hero-visual-content">
               <div className="hero-upload-zone">
@@ -329,6 +373,78 @@ export default function LandingPage({ onGetStarted, onLogin }) {
               <span className="guarantee-badge"><Check size={14} /> No questions asked</span>
               <span className="guarantee-badge"><Check size={14} /> Cancel anytime</span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* INTEGRATIONS */}
+      <section className="integrations">
+        <div className="container">
+          <div className="section-header">
+            <h2 className="section-title">Works with the tools you already use</h2>
+            <p className="section-subtitle">Export clean data directly into your accounting software. No plugins, no setup, no reformatting.</p>
+          </div>
+          <div className="integrations-grid">
+            {INTEGRATIONS.map((int) => (
+              <div key={int.name} className="integration-item">
+                <div className="integration-icon" style={{ background: int.color + '15', color: int.color }}>
+                  <Layers size={22} />
+                </div>
+                <span className="integration-name">{int.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SECURITY */}
+      <section className="security">
+        <div className="container">
+          <div className="section-header">
+            <h2 className="section-title">Enterprise-grade security, built in</h2>
+            <p className="section-subtitle">Your financial documents deserve bank-level protection. That's exactly what they get.</p>
+          </div>
+          <div className="security-grid">
+            <div className="card security-card">
+              <Shield size={24} className="security-icon" />
+              <h3>AES-256 Encryption</h3>
+              <p>All documents encrypted in transit and at rest using bank-grade encryption standards.</p>
+            </div>
+            <div className="card security-card">
+              <Lock size={24} className="security-icon" />
+              <h3>Auto-Delete Processing</h3>
+              <p>Documents are never stored permanently. Files are automatically purged after extraction completes.</p>
+            </div>
+            <div className="card security-card">
+              <Globe size={24} className="security-icon" />
+              <h3>SOC 2 Infrastructure</h3>
+              <p>Hosted on SOC 2 compliant infrastructure with continuous monitoring and audit trails.</p>
+            </div>
+            <div className="card security-card">
+              <Users size={24} className="security-icon" />
+              <h3>Role-Based Access</h3>
+              <p>Business plans include team accounts with granular permissions and activity logging.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="faq">
+        <div className="container">
+          <div className="section-header">
+            <h2 className="section-title">Frequently asked questions</h2>
+          </div>
+          <div className="faq-list">
+            {FAQS.map((faq, i) => (
+              <div key={i} className={`faq-item ${openFaq === i ? 'open' : ''}`} onClick={() => setOpenFaq(openFaq === i ? null : i)}>
+                <div className="faq-question">
+                  <span>{faq.q}</span>
+                  <ChevronDown size={18} className="faq-chevron" />
+                </div>
+                {openFaq === i && <div className="faq-answer">{faq.a}</div>}
+              </div>
+            ))}
           </div>
         </div>
       </section>
