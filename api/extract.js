@@ -2,10 +2,7 @@
 // Receives a base64-encoded document image, sends to Claude Vision, returns structured data
 // SECURED: requires valid Supabase JWT, enforces plan limits, validates input
 
-import Anthropic from '@anthropic-ai/sdk';
 import { setCorsHeaders, verifyAuth, getSupabaseAdmin } from './_auth.js';
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const PLAN_LIMITS = { demo: 1, pro: 100, business: 500 };
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB base64 limit
@@ -53,8 +50,6 @@ export default async function handler(req, res) {
   const user = await verifyAuth(req, res);
   if (!user) return; // 401 already sent
 
-  // Use the user's authenticated client (passes RLS) instead of admin client
-  // Admin client only works with service role key, which may not be set
   const supabase = user._supabaseClient || getSupabaseAdmin();
 
   try {
@@ -78,7 +73,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Unsupported file type. Use JPEG, PNG, WebP, GIF, or PDF.' });
     }
 
-    // PLAN LIMIT CHECK — use the authenticated user's ID, not a user-supplied one
+    // PLAN LIMIT CHECK
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('plan, demo_remaining, docs_used_this_month')
@@ -86,11 +81,11 @@ export default async function handler(req, res) {
       .single();
 
     if (profileError || !profile) {
-      console.error('Profile lookup failed:', profileError?.message, 'userId:', user.id);
+      console.error('Profile lookup failed:', profileError?.message);
       return res.status(403).json({ error: 'Profile not found', details: profileError?.message });
     }
 
-    console.log('Profile found:', { plan: profile.plan, demo_remaining: profile.demo_remaining, docs_used: profile.docs_used_this_month });
+    console.log('Profile found:', JSON.stringify({ plan: profile.plan, demo_remaining: profile.demo_remaining }));
 
     const limit = PLAN_LIMITS[profile.plan] || 1;
 
@@ -100,19 +95,20 @@ export default async function handler(req, res) {
       }
     } else {
       if ((profile.docs_used_this_month || 0) >= limit) {
-        return res.status(403).json({ error: `Monthly limit of ${limit} documents reached. Please upgrade or wait for next billing cycle.` });
+        return res.status(403).json({ error: `Monthly limit of ${limit} documents reached.` });
       }
     }
 
-    // Check API key before calling Claude
+    // Check API key
     if (!process.env.ANTHROPIC_API_KEY) {
       return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
     }
 
-    // Build Claude message
+    // Build message content for Claude
     const messageContent = [];
 
     if (mediaType === 'application/pdf') {
+      // For PDFs, use the document type with beta header via raw fetch
       messageContent.push({
         type: 'document',
         source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 },
@@ -126,27 +122,44 @@ export default async function handler(req, res) {
 
     messageContent.push({ type: 'text', text: EXTRACTION_PROMPT });
 
-    // Call Claude Vision
-    console.log('Calling Claude API. Key set:', !!process.env.ANTHROPIC_API_KEY, 'Media type:', mediaType);
-    let response;
-    try {
-      response = await anthropic.messages.create({
+    // Call Claude API directly via fetch to avoid SDK version issues
+    console.log('Calling Claude API via fetch. Media type:', mediaType);
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    };
+
+    // Add PDF beta header if needed
+    if (mediaType === 'application/pdf') {
+      headers['anthropic-beta'] = 'pdfs-2024-09-25';
+    }
+
+    const apiResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4096,
         messages: [{ role: 'user', content: messageContent }],
-      });
-    } catch (apiErr) {
-      console.error('Claude API error:', apiErr.message, apiErr.status);
+      }),
+    });
+
+    const apiResult = await apiResponse.json();
+
+    if (!apiResponse.ok) {
+      console.error('Claude API error:', JSON.stringify(apiResult));
       return res.status(500).json({
         error: 'Claude API call failed',
-        message: apiErr.message,
-        status: apiErr.status,
-        type: apiErr.type || apiErr.name,
+        message: apiResult.error?.message || 'Unknown API error',
+        type: apiResult.error?.type,
+        apiStatus: apiResponse.status,
       });
     }
 
     // Parse the response
-    const responseText = response.content[0].text;
+    const responseText = apiResult.content[0].text;
     let extractedData;
 
     try {
@@ -158,7 +171,7 @@ export default async function handler(req, res) {
       if (jsonStart !== -1 && jsonEnd !== -1) {
         extractedData = JSON.parse(responseText.substring(jsonStart, jsonEnd + 1));
       } else {
-        throw new Error('Failed to parse extraction result');
+        return res.status(500).json({ error: 'Failed to parse extraction result', raw: responseText.substring(0, 200) });
       }
     }
 
@@ -170,9 +183,8 @@ export default async function handler(req, res) {
     });
     const confidence = Math.round((filledFields.length / fields.length) * 100);
 
-    // Update document in Supabase — use authenticated user.id for the query
+    // Update document in Supabase
     if (documentId) {
-      // Verify the document belongs to this user before updating
       const { data: existingDoc } = await supabase
         .from('documents')
         .select('user_id')
@@ -184,11 +196,11 @@ export default async function handler(req, res) {
           .from('documents')
           .update({ status: 'completed', extracted_data: extractedData, confidence })
           .eq('id', documentId)
-          .eq('user_id', user.id); // double-check ownership
+          .eq('user_id', user.id);
       }
     }
 
-    // Update usage — always use authenticated user.id
+    // Update usage
     if (profile.plan === 'demo') {
       await supabase
         .from('profiles')
@@ -203,13 +215,11 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ success: true, data: extractedData, confidence, fileName });
   } catch (error) {
-    console.error('Extraction error:', error.name, error.message, error.status);
+    console.error('Extraction error:', error.name, error.message);
     return res.status(500).json({
       error: 'Extraction failed',
       message: error.message,
       name: error.name,
-      status: error.status,
-      apiKeySet: !!process.env.ANTHROPIC_API_KEY
     });
   }
 }

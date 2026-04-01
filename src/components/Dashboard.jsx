@@ -120,7 +120,13 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
             }),
           });
 
-          const result = await response.json();
+          let result;
+          try {
+            result = await response.json();
+          } catch (parseErr) {
+            console.error('Failed to parse response. Status:', response.status);
+            throw new Error(`Server returned ${response.status}`);
+          }
 
           if (result.success) {
             setDocuments((prev) =>
@@ -139,7 +145,8 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
               .single();
             if (updatedProfile && onProfileUpdate) onProfileUpdate(updatedProfile);
           } else {
-            // Mark as failed
+            // Mark as failed — log the server error for debugging
+            console.error('Extraction API error:', JSON.stringify(result));
             setDocuments((prev) =>
               prev.map((d) =>
                 d.id === docId ? { ...d, status: 'failed' } : d
