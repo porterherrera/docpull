@@ -16,14 +16,16 @@ Return ONLY valid JSON with this exact structure (no markdown, no explanation):
   "invoiceNumber": "Invoice/receipt number",
   "date": "Date on document",
   "dueDate": "Due date if present, otherwise null",
+  "poNumber": "Purchase order number if present, otherwise null",
+  "category": "Document category: invoice, receipt, credit-note, estimate, or other",
   "subtotal": 0.00,
   "tax": 0.00,
   "total": 0.00,
   "currency": "USD",
   "paymentMethod": "Payment method if shown, otherwise null",
   "billTo": {
-    "name": "Customer name if present",
-    "address": "Customer address if present"
+    "name": "Customer/buyer name if present",
+    "address": "Customer/buyer full address if present"
   },
   "lineItems": [
     {
@@ -33,10 +35,10 @@ Return ONLY valid JSON with this exact structure (no markdown, no explanation):
       "amount": 0.00
     }
   ],
-  "notes": "Any additional notes or terms"
+  "notes": "Any additional notes, terms, or payment instructions"
 }
 
-Be precise with numbers. If a field is not present in the document, use null. Always return valid JSON.`;
+Be precise with numbers — use raw numeric values, not formatted strings. Extract every line item visible in the document. If a field is not present in the document, use null. Always return valid JSON.`;
 
 export default async function handler(req, res) {
   // CORS
