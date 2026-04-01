@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase.js';
 import { exportToExcel, exportToCSV, exportAllToExcel } from '../export.js';
 import './Dashboard.css';
 
-const PLAN_LIMITS = { demo: 1, pro: 100, business: 500 };
+const PLAN_LIMITS = { demo: 3, pro: 100, business: 500 };
 
 export default function Dashboard({ user, profile, onProfileUpdate, onLogout, onGoLanding }) {
   const [documents, setDocuments] = useState([]);
@@ -333,7 +333,7 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
           {!canExtract && plan === 'demo' && (
             <div className="usage-warning">
               <AlertCircle size={16} />
-              <span>You've used your free extraction. <strong onClick={() => setUpgradeModal(true)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>Upgrade to Pro</strong> for 100 documents/month.</span>
+              <span>You've used all 3 free extractions. <strong onClick={() => setUpgradeModal(true)} style={{ cursor: 'pointer', textDecoration: 'underline' }}>Upgrade to Pro</strong> for 100 documents/month.</span>
             </div>
           )}
 
@@ -400,7 +400,7 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
                   <>
                     <Lock size={38} className="upload-zone-icon" style={{ opacity: 0.4 }} />
                     <p className="upload-zone-title">Upgrade to continue extracting</p>
-                    <p className="upload-zone-sub">You've used your free extraction. Upgrade for up to 500 documents/month.</p>
+                    <p className="upload-zone-sub">You've used all 3 free extractions. Upgrade for up to 500 documents/month.</p>
                     <div className="btn btn-primary" style={{ marginTop: 14 }}>
                       <Zap size={14} /> View Plans
                     </div>

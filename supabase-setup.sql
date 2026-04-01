@@ -9,7 +9,7 @@ create table public.profiles (
   email text not null,
   name text,
   plan text default 'demo',
-  demo_remaining integer default 1,
+  demo_remaining integer default 3,
   stripe_customer_id text,
   docs_used_this_month integer default 0,
   billing_cycle_start timestamptz default now(),

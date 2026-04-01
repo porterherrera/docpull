@@ -61,14 +61,14 @@ export default function AuthScreen({ onAuth, isLogin, onToggle }) {
           <p className="auth-subtitle">
             {isLogin
               ? 'Log in to your DocPull account'
-              : 'Create an account to get 1 free document extraction — see the magic before you pay a cent.'}
+              : 'Create an account to get 3 free extractions — see the magic before you pay a cent.'}
           </p>
         </div>
 
         <div className="card auth-card">
           {!isLogin && (
             <div className="auth-demo-badge">
-              <Check size={14} /> 1 free extraction included — no credit card needed
+              <Check size={14} /> 3 free extractions included — no credit card needed
             </div>
           )}
 

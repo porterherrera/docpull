@@ -139,7 +139,7 @@ export default function LandingPage({ onGetStarted, onLogin }) {
           </p>
           <div className="hero-actions">
             <button className="btn btn-primary btn-lg" onClick={onGetStarted}>
-              Try One Free Extraction <ArrowRight size={18} />
+              Try 3 Free Extractions <ArrowRight size={18} />
             </button>
             <button className="btn btn-secondary btn-lg">
               <Play size={16} /> See It In Action
@@ -342,7 +342,7 @@ export default function LandingPage({ onGetStarted, onLogin }) {
             <button className="btn btn-primary btn-lg" onClick={onGetStarted}>
               Start Extracting Now <ArrowRight size={18} />
             </button>
-            <p className="cta-note">1 free extraction · No credit card required · Cancel anytime</p>
+            <p className="cta-note">3 free extractions · No credit card required · Cancel anytime</p>
           </div>
         </div>
       </section>

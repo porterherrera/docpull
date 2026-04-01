@@ -4,7 +4,7 @@
 
 import { setCorsHeaders, verifyAuth, getSupabaseAdmin } from './_auth.js';
 
-const PLAN_LIMITS = { demo: 1, pro: 100, business: 500 };
+const PLAN_LIMITS = { demo: 3, pro: 100, business: 500 };
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB base64 limit
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
 
