@@ -128,11 +128,22 @@ export default async function handler(req, res) {
 
     // Call Claude Vision
     console.log('Calling Claude API. Key set:', !!process.env.ANTHROPIC_API_KEY, 'Media type:', mediaType);
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: messageContent }],
-    });
+    let response;
+    try {
+      response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: messageContent }],
+      });
+    } catch (apiErr) {
+      console.error('Claude API error:', apiErr.message, apiErr.status);
+      return res.status(500).json({
+        error: 'Claude API call failed',
+        message: apiErr.message,
+        status: apiErr.status,
+        type: apiErr.type || apiErr.name,
+      });
+    }
 
     // Parse the response
     const responseText = response.content[0].text;
