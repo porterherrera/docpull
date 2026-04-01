@@ -67,6 +67,8 @@ export async function verifyAuth(req, res) {
       return null;
     }
 
+    // Return both user and their authenticated client (passes RLS)
+    user._supabaseClient = userClient;
     return user;
   } catch (err) {
     console.error('Auth: Exception:', err.message);

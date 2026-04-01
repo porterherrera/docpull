@@ -53,7 +53,9 @@ export default async function handler(req, res) {
   const user = await verifyAuth(req, res);
   if (!user) return; // 401 already sent
 
-  const supabase = getSupabaseAdmin();
+  // Use the user's authenticated client (passes RLS) instead of admin client
+  // Admin client only works with service role key, which may not be set
+  const supabase = user._supabaseClient || getSupabaseAdmin();
 
   try {
     const { fileBase64, fileType, fileName, documentId } = req.body;
