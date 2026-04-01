@@ -3,6 +3,7 @@ import {
   FileText, Upload, Download, Home, File, Settings,
   LogOut, Eye, Trash2, Check, RefreshCw, X,
   Clock, BarChart3, DollarSign, AlertCircle, Lock, CreditCard,
+  CheckCircle, XCircle, Loader2, Files, Zap,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
 import { exportToExcel, exportToCSV, exportAllToExcel } from '../export.js';
@@ -16,6 +17,7 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
   const [view, setView] = useState('dashboard');
   const [dragActive, setDragActive] = useState(false);
   const [upgradeModal, setUpgradeModal] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(null); // { total, completed, failed, current }
   const fileInputRef = useRef(null);
 
   const plan = profile?.plan || 'demo';
@@ -24,12 +26,34 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
     : (profile?.docs_used_this_month || 0);
   const docsLimit = PLAN_LIMITS[plan] || 1;
   const canExtract = docsUsed < docsLimit;
+  const remaining = Math.max(0, docsLimit - docsUsed);
 
   // Load documents from Supabase on mount
   useEffect(() => {
     if (!user?.id) return;
     loadDocuments();
   }, [user?.id]);
+
+  // Check for checkout success/cancel in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') === 'success') {
+      // Refresh profile to get updated plan
+      refreshProfile();
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('checkout') === 'cancel') {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  async function refreshProfile() {
+    const { data: updatedProfile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    if (updatedProfile && onProfileUpdate) onProfileUpdate(updatedProfile);
+  }
 
   async function loadDocuments() {
     const { data } = await supabase
@@ -63,8 +87,26 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
     }
 
     const fileList = Array.from(files);
+    const maxFiles = Math.min(fileList.length, remaining);
 
-    for (const file of fileList) {
+    if (maxFiles < fileList.length) {
+      // Can only process some files
+      alert(`You can only process ${remaining} more document${remaining !== 1 ? 's' : ''} on your current plan. Processing the first ${maxFiles}.`);
+    }
+
+    const filesToProcess = fileList.slice(0, maxFiles);
+
+    if (filesToProcess.length > 1) {
+      setBatchProgress({ total: filesToProcess.length, completed: 0, failed: 0, current: filesToProcess[0].name });
+    }
+
+    for (let i = 0; i < filesToProcess.length; i++) {
+      const file = filesToProcess[i];
+
+      if (filesToProcess.length > 1) {
+        setBatchProgress(prev => ({ ...prev, current: file.name }));
+      }
+
       // Create document record in Supabase first
       const { data: docRecord, error: insertError } = await supabase
         .from('documents')
@@ -80,6 +122,9 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
 
       if (insertError) {
         console.error('Failed to create document:', insertError);
+        if (filesToProcess.length > 1) {
+          setBatchProgress(prev => ({ ...prev, failed: prev.failed + 1 }));
+        }
         continue;
       }
 
@@ -95,80 +140,78 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
         extraction: null,
       }, ...prev]);
 
-      // Convert file to base64
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64 = reader.result.split(',')[1]; // Remove data:...;base64, prefix
+      // Convert file to base64 and extract
+      try {
+        const base64 = await fileToBase64(file);
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
 
+        const response = await fetch('/api/extract', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            fileBase64: base64,
+            fileType: file.type,
+            fileName: file.name,
+            documentId: docId,
+          }),
+        });
+
+        let result;
         try {
-          // Get auth token for secure API call
-          const { data: { session } } = await supabase.auth.getSession();
-          const token = session?.access_token;
+          result = await response.json();
+        } catch {
+          throw new Error(`Server returned ${response.status}`);
+        }
 
-          // Call extraction API with auth
-          const response = await fetch('/api/extract', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              fileBase64: base64,
-              fileType: file.type,
-              fileName: file.name,
-              documentId: docId,
-            }),
-          });
-
-          let result;
-          try {
-            result = await response.json();
-          } catch (parseErr) {
-            console.error('Failed to parse response. Status:', response.status);
-            throw new Error(`Server returned ${response.status}`);
-          }
-
-          if (result.success) {
-            setDocuments((prev) =>
-              prev.map((d) =>
-                d.id === docId
-                  ? { ...d, status: 'completed', extraction: { ...result.data, confidence: result.confidence } }
-                  : d
-              )
-            );
-
-            // Refresh profile to update usage counts
-            const { data: updatedProfile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', user.id)
-              .single();
-            if (updatedProfile && onProfileUpdate) onProfileUpdate(updatedProfile);
-          } else {
-            // Mark as failed — log the server error for debugging
-            console.error('Extraction API error:', JSON.stringify(result));
-            setDocuments((prev) =>
-              prev.map((d) =>
-                d.id === docId ? { ...d, status: 'failed' } : d
-              )
-            );
-            await supabase
-              .from('documents')
-              .update({ status: 'failed' })
-              .eq('id', docId);
-          }
-        } catch (err) {
-          console.error('Extraction failed:', err);
+        if (result.success) {
           setDocuments((prev) =>
             prev.map((d) =>
-              d.id === docId ? { ...d, status: 'failed' } : d
+              d.id === docId
+                ? { ...d, status: 'completed', extraction: { ...result.data, confidence: result.confidence } }
+                : d
             )
           );
+          if (filesToProcess.length > 1) {
+            setBatchProgress(prev => ({ ...prev, completed: prev.completed + 1 }));
+          }
+        } else {
+          console.error('Extraction API error:', JSON.stringify(result));
+          setDocuments((prev) =>
+            prev.map((d) => d.id === docId ? { ...d, status: 'failed' } : d)
+          );
+          await supabase.from('documents').update({ status: 'failed' }).eq('id', docId);
+          if (filesToProcess.length > 1) {
+            setBatchProgress(prev => ({ ...prev, failed: prev.failed + 1 }));
+          }
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error('Extraction failed:', err);
+        setDocuments((prev) =>
+          prev.map((d) => d.id === docId ? { ...d, status: 'failed' } : d)
+        );
+        if (filesToProcess.length > 1) {
+          setBatchProgress(prev => ({ ...prev, failed: prev.failed + 1 }));
+        }
+      }
     }
-  }, [user?.id, canExtract]);
+
+    // Batch complete — refresh profile
+    setBatchProgress(null);
+    refreshProfile();
+  }, [user?.id, canExtract, remaining]);
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
@@ -197,9 +240,13 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
       const result = await response.json();
       if (result.url) {
         window.location.href = result.url;
+      } else {
+        console.error('No checkout URL:', result);
+        alert('Failed to start checkout. Please try again.');
       }
     } catch (err) {
       console.error('Checkout error:', err);
+      alert('Failed to start checkout. Please try again.');
     }
   };
 
@@ -207,7 +254,7 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
   const totalExtracted = completedDocs.reduce((s, d) => s + (d.extraction?.total || 0), 0);
   const avgConfidence = completedDocs.length > 0
     ? (completedDocs.reduce((s, d) => s + (d.extraction?.confidence || 0), 0) / completedDocs.length).toFixed(1)
-    : '—';
+    : null;
 
   const displayName = profile?.name || user?.user_metadata?.name || user?.email?.split('@')[0] || 'User';
   const displayPlan = plan === 'demo' ? 'Free Trial' : plan.charAt(0).toUpperCase() + plan.slice(1);
@@ -290,14 +337,36 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
             </div>
           )}
 
+          {/* Batch progress banner */}
+          {batchProgress && (
+            <div className="batch-progress">
+              <div className="batch-progress-header">
+                <Files size={16} />
+                <span>Processing {batchProgress.completed + batchProgress.failed + 1} of {batchProgress.total} files</span>
+              </div>
+              <div className="batch-progress-bar">
+                <div
+                  className="batch-progress-fill"
+                  style={{ width: `${((batchProgress.completed + batchProgress.failed) / batchProgress.total) * 100}%` }}
+                />
+              </div>
+              <div className="batch-progress-detail">
+                <Loader2 size={12} className="animate-spin" />
+                <span>{batchProgress.current}</span>
+                {batchProgress.completed > 0 && <span className="batch-done">{batchProgress.completed} done</span>}
+                {batchProgress.failed > 0 && <span className="batch-fail">{batchProgress.failed} failed</span>}
+              </div>
+            </div>
+          )}
+
           {/* DASHBOARD */}
           {view === 'dashboard' && (
             <>
               <div className="stats-row">
                 <StatCard label="Documents Processed" value={completedDocs.length} icon={<FileText size={18} />} color="blue" />
-                <StatCard label="Total Extracted" value={`$${totalExtracted.toFixed(2)}`} icon={<DollarSign size={18} />} color="green" />
-                <StatCard label="Avg. Confidence" value={avgConfidence !== '—' ? avgConfidence + '%' : '—'} icon={<BarChart3 size={18} />} color="sky" />
-                <StatCard label="Time Saved" value={completedDocs.length > 0 ? `~${(completedDocs.length * 4.5).toFixed(0)} min` : '—'} icon={<Clock size={18} />} color="amber" />
+                <StatCard label="Total Extracted" value={`$${totalExtracted.toLocaleString('en-US', { minimumFractionDigits: 2 })}`} icon={<DollarSign size={18} />} color="green" />
+                <StatCard label="Avg. Confidence" value={avgConfidence ? avgConfidence + '%' : '—'} icon={<BarChart3 size={18} />} color="sky" />
+                <StatCard label="Time Saved" value={completedDocs.length > 0 ? `~${(completedDocs.length * 5).toFixed(0)} min` : '—'} icon={<Clock size={18} />} color="amber" />
               </div>
 
               <div
@@ -321,15 +390,20 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
                     <p className="upload-zone-title">
                       {dragActive ? 'Drop your files here' : 'Upload invoices or receipts'}
                     </p>
-                    <p className="upload-zone-sub">Drag & drop or click to browse. PDF, JPG, PNG accepted.</p>
-                    <div className="btn btn-primary" style={{ marginTop: 14 }}>Choose Files</div>
+                    <p className="upload-zone-sub">Drag & drop or click to browse. PDF, JPG, PNG accepted. Select multiple files at once.</p>
+                    <div className="btn btn-primary" style={{ marginTop: 14 }}>
+                      <Upload size={14} /> Choose Files
+                    </div>
+                    <p className="upload-zone-remaining">{remaining} extraction{remaining !== 1 ? 's' : ''} remaining</p>
                   </>
                 ) : (
                   <>
                     <Lock size={38} className="upload-zone-icon" style={{ opacity: 0.4 }} />
                     <p className="upload-zone-title">Upgrade to continue extracting</p>
-                    <p className="upload-zone-sub">You've used your free extraction. Upgrade for unlimited access.</p>
-                    <div className="btn btn-primary" style={{ marginTop: 14 }}>View Plans</div>
+                    <p className="upload-zone-sub">You've used your free extraction. Upgrade for up to 500 documents/month.</p>
+                    <div className="btn btn-primary" style={{ marginTop: 14 }}>
+                      <Zap size={14} /> View Plans
+                    </div>
                   </>
                 )}
               </div>
@@ -441,10 +515,9 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
             </div>
 
             <div className="modal-badges">
-              <span className="badge badge-green">{selectedDoc.extraction.confidence}% confidence</span>
-              {selectedDoc.extraction.category && (
-                <span className="badge badge-blue">{selectedDoc.extraction.category}</span>
-              )}
+              <span className={`badge ${selectedDoc.extraction.confidence >= 90 ? 'badge-green' : selectedDoc.extraction.confidence >= 70 ? 'badge-amber' : 'badge-red'}`}>
+                {selectedDoc.extraction.confidence}% confidence
+              </span>
             </div>
 
             <div className="modal-fields">
@@ -453,8 +526,8 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
                 ['Date', selectedDoc.extraction.date],
                 ['Due Date', selectedDoc.extraction.dueDate],
                 ['Currency', selectedDoc.extraction.currency],
-                ['Subtotal', selectedDoc.extraction.subtotal != null ? `$${Number(selectedDoc.extraction.subtotal).toFixed(2)}` : '—'],
-                ['Tax', selectedDoc.extraction.tax != null ? `$${Number(selectedDoc.extraction.tax).toFixed(2)}` : '—'],
+                ['Subtotal', selectedDoc.extraction.subtotal != null ? `$${Number(selectedDoc.extraction.subtotal).toFixed(2)}` : null],
+                ['Tax', selectedDoc.extraction.tax != null ? `$${Number(selectedDoc.extraction.tax).toFixed(2)}` : null],
               ].map(([k, v]) => (
                 <div key={k} className="modal-field">
                   <div className="modal-field-label">{k}</div>
@@ -466,7 +539,7 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
             <div className="modal-total">
               <div className="modal-field-label">Total</div>
               <div className="modal-total-value">
-                ${selectedDoc.extraction.total != null ? Number(selectedDoc.extraction.total).toFixed(2) : '0.00'}
+                ${selectedDoc.extraction.total != null ? Number(selectedDoc.extraction.total).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}
               </div>
             </div>
 
@@ -495,6 +568,14 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
               </>
             )}
 
+            {selectedDoc.extraction.billTo && (selectedDoc.extraction.billTo.name || selectedDoc.extraction.billTo.address) && (
+              <div className="modal-billto">
+                <h3 className="modal-section-title">Bill To</h3>
+                {selectedDoc.extraction.billTo.name && <div className="modal-billto-name">{selectedDoc.extraction.billTo.name}</div>}
+                {selectedDoc.extraction.billTo.address && <div className="modal-billto-addr">{selectedDoc.extraction.billTo.address}</div>}
+              </div>
+            )}
+
             <div className="modal-actions">
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => exportToExcel(selectedDoc)}>
                 <Download size={15} /> Export Excel
@@ -520,43 +601,52 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '20px 0' }}>
-              <div className="card" style={{ padding: 24, border: '2px solid var(--primary)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div className="card upgrade-card recommended">
+                <div className="upgrade-badge">Most Popular</div>
+                <div className="upgrade-card-inner">
                   <div>
-                    <h3 style={{ fontSize: 18, fontWeight: 700 }}>Pro</h3>
-                    <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>100 documents/month</p>
+                    <h3 className="upgrade-plan-name">Pro</h3>
+                    <p className="upgrade-plan-desc">100 documents/month</p>
+                    <ul className="upgrade-features">
+                      <li><Check size={13} /> AI-powered data extraction</li>
+                      <li><Check size={13} /> Excel & CSV export</li>
+                      <li><Check size={13} /> Priority processing</li>
+                    </ul>
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 800 }}>$49<span style={{ fontSize: 14, color: 'var(--text-muted)', fontWeight: 400 }}>/mo</span></div>
+                  <div className="upgrade-price-block">
+                    <div className="upgrade-price">$49<span>/mo</span></div>
+                    <div className="upgrade-price-sub">$0.49 per document</div>
+                  </div>
                 </div>
-                <button
-                  className="btn btn-primary"
-                  style={{ width: '100%' }}
-                  onClick={() => handleUpgrade('pro')}
-                >
+                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => handleUpgrade('pro')}>
                   Start Pro Plan
                 </button>
               </div>
 
-              <div className="card" style={{ padding: 24 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div className="card upgrade-card">
+                <div className="upgrade-card-inner">
                   <div>
-                    <h3 style={{ fontSize: 18, fontWeight: 700 }}>Business</h3>
-                    <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>500 documents/month</p>
+                    <h3 className="upgrade-plan-name">Business</h3>
+                    <p className="upgrade-plan-desc">500 documents/month</p>
+                    <ul className="upgrade-features">
+                      <li><Check size={13} /> Everything in Pro</li>
+                      <li><Check size={13} /> Bulk batch processing</li>
+                      <li><Check size={13} /> Dedicated support</li>
+                    </ul>
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 800 }}>$149<span style={{ fontSize: 14, color: 'var(--text-muted)', fontWeight: 400 }}>/mo</span></div>
+                  <div className="upgrade-price-block">
+                    <div className="upgrade-price">$149<span>/mo</span></div>
+                    <div className="upgrade-price-sub">$0.30 per document</div>
+                  </div>
                 </div>
-                <button
-                  className="btn btn-secondary"
-                  style={{ width: '100%' }}
-                  onClick={() => handleUpgrade('business')}
-                >
+                <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => handleUpgrade('business')}>
                   Start Business Plan
                 </button>
               </div>
             </div>
 
-            <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
-              30-day "5 hours saved" guarantee · Cancel anytime
+            <p className="upgrade-guarantee">
+              <CheckCircle size={14} /> 30-day "5 hours saved" guarantee · Cancel anytime
             </p>
           </div>
         </div>
@@ -592,13 +682,13 @@ function DocRow({ doc, onView, onExportExcel, onExportCSV, onDelete }) {
   const isFailed = doc.status === 'failed';
 
   return (
-    <div className="doc-row animate-fade-in">
+    <div className={`doc-row animate-fade-in ${isProcessing ? 'doc-row-processing' : ''}`}>
       <div className={`doc-status-icon ${isProcessing ? 'processing' : isFailed ? 'failed' : 'done'}`}>
         {isProcessing
           ? <RefreshCw size={16} className="animate-spin" />
           : isFailed
-            ? <AlertCircle size={16} />
-            : <Check size={16} />}
+            ? <XCircle size={16} />
+            : <CheckCircle size={16} />}
       </div>
       <div className="doc-info">
         <div className="doc-name">{doc.fileName}</div>
@@ -608,18 +698,22 @@ function DocRow({ doc, onView, onExportExcel, onExportCSV, onDelete }) {
             : isFailed
               ? 'Extraction failed'
               : doc.extraction
-                ? `${doc.extraction.vendor || 'Unknown'} · $${Number(doc.extraction.total || 0).toFixed(2)}`
+                ? `${doc.extraction.vendor || 'Unknown'} · $${Number(doc.extraction.total || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} · ${doc.extraction.confidence}%`
                 : ''}
         </div>
       </div>
-      {!isProcessing && !isFailed && doc.extraction && (
-        <div className="doc-actions">
-          <button className="btn btn-sm doc-btn view" onClick={onView}><Eye size={12} /> View</button>
-          <button className="btn btn-sm doc-btn excel" onClick={onExportExcel}><Download size={12} /> Excel</button>
-          <button className="btn btn-sm doc-btn csv" onClick={onExportCSV}>CSV</button>
-          <button className="btn btn-sm doc-btn delete" onClick={onDelete}><Trash2 size={12} /></button>
-        </div>
-      )}
+      <div className="doc-actions">
+        {isProcessing && <span className="doc-processing-label">Processing...</span>}
+        {isFailed && <button className="btn btn-sm doc-btn delete" onClick={onDelete}><Trash2 size={12} /></button>}
+        {!isProcessing && !isFailed && doc.extraction && (
+          <>
+            <button className="btn btn-sm doc-btn view" onClick={onView}><Eye size={12} /> View</button>
+            <button className="btn btn-sm doc-btn excel" onClick={onExportExcel}><Download size={12} /> Excel</button>
+            <button className="btn btn-sm doc-btn csv" onClick={onExportCSV}>CSV</button>
+            <button className="btn btn-sm doc-btn delete" onClick={onDelete}><Trash2 size={12} /></button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

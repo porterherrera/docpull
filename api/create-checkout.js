@@ -41,7 +41,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid plan. Use "pro" or "business".' });
     }
 
-    const origin = req.headers.origin || 'https://docpull-psi.vercel.app';
+    const origin = req.headers.origin || 'https://documentpull.com';
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',

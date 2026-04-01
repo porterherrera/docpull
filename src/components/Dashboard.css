@@ -177,6 +177,152 @@
 
 .doc-status-icon.failed { background: #FEF2F2; color: #DC2626; }
 
+/* -- Batch progress -- */
+.batch-progress {
+  background: var(--primary-bg);
+  border: 1px solid var(--primary-border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+
+.batch-progress-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 10px;
+}
+
+.batch-progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.batch-progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.batch-progress-detail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.batch-done { color: var(--green); font-weight: 600; }
+.batch-fail { color: var(--danger); font-weight: 600; }
+
+.doc-row-processing { background: var(--primary-bg); border-color: var(--primary-border); }
+
+.doc-processing-label {
+  font-size: 12px;
+  color: var(--primary);
+  font-weight: 500;
+}
+
+/* -- Upload remaining -- */
+.upload-zone-remaining {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* -- Upgrade modal -- */
+.upgrade-card {
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.upgrade-card.recommended {
+  border: 2px solid var(--primary);
+}
+
+.upgrade-badge {
+  position: absolute;
+  top: 12px;
+  right: -30px;
+  transform: rotate(45deg);
+  background: var(--primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 36px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.upgrade-card-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 16px;
+}
+
+.upgrade-plan-name { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+.upgrade-plan-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+
+.upgrade-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.upgrade-features li {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.upgrade-features li svg { color: var(--green); flex-shrink: 0; }
+
+.upgrade-price-block { text-align: right; }
+.upgrade-price { font-size: 28px; font-weight: 800; }
+.upgrade-price span { font-size: 14px; color: var(--text-muted); font-weight: 400; }
+.upgrade-price-sub { font-size: 11px; color: var(--text-muted); }
+
+.upgrade-guarantee {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.upgrade-guarantee svg { color: var(--green); }
+
+/* -- Bill To section -- */
+.modal-billto {
+  margin-bottom: 22px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border-radius: 8px;
+}
+
+.modal-billto-name { font-size: 14px; font-weight: 600; }
+.modal-billto-addr { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+/* -- Confidence badges -- */
+.badge-amber { background: var(--warning-bg); color: #D97706; }
+.badge-red { background: #FEF2F2; color: #DC2626; }
+
 /* -- Document list -- */
 .recent-title { font-size: 15px; font-weight: 700; margin-bottom: 14px; }
 .doc-list { display: flex; flex-direction: column; gap: 6px; }
