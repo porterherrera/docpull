@@ -1,5 +1,5 @@
 -- ============================================================
--- DocPull Security Fix
+-- DocumentPull Security Fix
 -- Run this in: Supabase Dashboard → SQL Editor → New Query
 -- ============================================================
 

@@ -36,7 +36,7 @@ export function exportToExcel(doc) {
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Invoice Data");
-  XLSX.writeFile(wb, `DocPull_${e.invoiceNumber || "export"}.xlsx`);
+  XLSX.writeFile(wb, `DocumentPull_${e.invoiceNumber || "export"}.xlsx`);
 }
 
 /**
@@ -62,7 +62,7 @@ export function exportToCSV(doc) {
     csv += `"${li.description}",${li.qty},${li.unitPrice},${li.amount}\n`;
   });
 
-  downloadBlob(csv, `DocPull_${e.invoiceNumber || "export"}.csv`, "text/csv");
+  downloadBlob(csv, `DocumentPull_${e.invoiceNumber || "export"}.csv`, "text/csv");
 }
 
 /**
@@ -74,7 +74,7 @@ export function exportAllToExcel(documents) {
 
   // Summary sheet
   const summaryData = [
-    ["DocPull Batch Export", "", "", "", "", "", "", "", "", ""],
+    ["DocumentPull Batch Export", "", "", "", "", "", "", "", "", ""],
     [`Generated: ${new Date().toLocaleString()}`, "", "", "", "", "", "", "", "", ""],
     [`Documents: ${completed.length}`, "", "", "", "", "", "", "", "", ""],
     [],
@@ -118,7 +118,7 @@ export function exportAllToExcel(documents) {
     XLSX.utils.book_append_sheet(wb, sheet, name);
   });
 
-  XLSX.writeFile(wb, `DocPull_Batch_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  XLSX.writeFile(wb, `DocumentPull_Batch_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 function downloadBlob(content, filename, type) {

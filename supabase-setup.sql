@@ -1,5 +1,5 @@
 -- ============================================================
--- DocPull Supabase Setup
+-- DocumentPull Supabase Setup
 -- Run this ENTIRE script in: Supabase Dashboard → SQL Editor → New Query
 -- ============================================================
 

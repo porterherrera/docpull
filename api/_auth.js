@@ -13,8 +13,8 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey || supabaseAn
 const ALLOWED_ORIGINS = [
   'https://documentpull.com',
   'https://www.documentpull.com',
+  'https://documentpull.vercel.app',
   'https://docpull-psi.vercel.app',
-  'https://docpull.vercel.app',
   'http://localhost:5173',
   'http://localhost:3000',
 ];

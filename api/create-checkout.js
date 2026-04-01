@@ -9,12 +9,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const PLANS = {
   pro: {
-    name: 'DocPull Pro',
+    name: 'DocumentPull Pro',
     price: 4900,
     docs: '100 documents/month',
   },
   business: {
-    name: 'DocPull Business',
+    name: 'DocumentPull Business',
     price: 14900,
     docs: '500 documents/month',
   },

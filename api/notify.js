@@ -27,14 +27,14 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${resendKey}`,
       },
       body: JSON.stringify({
-        from: 'DocPull <notifications@documentpull.com>',
+        from: 'DocumentPull <notifications@documentpull.com>',
         to: [email],
         subject: `Extraction complete: ${fileName}`,
         html: `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px 20px;">
             <div style="text-align: center; margin-bottom: 28px;">
               <div style="display: inline-block; background: #2563EB; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px;">
-                <span style="color: white; font-weight: 700; font-size: 16px;">DocPull</span>
+                <span style="color: white; font-weight: 700; font-size: 16px;">DocumentPull</span>
               </div>
               <h1 style="font-size: 22px; font-weight: 700; margin: 0 0 6px;">Extraction Complete</h1>
               <p style="color: #6B7280; font-size: 14px; margin: 0;">Your document has been processed successfully.</p>
@@ -68,7 +68,7 @@ export default async function handler(req, res) {
             </div>
 
             <p style="text-align: center; color: #9CA3AF; font-size: 12px; margin: 0;">
-              You received this because you extracted a document on DocPull.
+              You received this because you extracted a document on DocumentPull.
             </p>
           </div>
         `,

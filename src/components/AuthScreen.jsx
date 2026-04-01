@@ -77,7 +77,7 @@ export default function AuthScreen({ onAuth, isLogin, onToggle }) {
           </h1>
           <p className="auth-subtitle">
             {isLogin
-              ? 'Log in to your DocPull account'
+              ? 'Log in to your DocumentPull account'
               : 'Create an account to get 3 free extractions — see the magic before you pay a cent.'}
           </p>
         </div>

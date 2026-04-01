@@ -25,7 +25,7 @@ const FEATURES = [
   {
     icon: <Clock size={22} />,
     title: "Get 12+ Hours Back",
-    desc: "Your team spends 3 hours a day on data entry. DocPull does it in seconds. That's 60+ hours a month you get back for actual work.",
+    desc: "Your team spends 3 hours a day on data entry. DocumentPull does it in seconds. That's 60+ hours a month you get back for actual work.",
   },
 ];
 
@@ -73,19 +73,19 @@ const TESTIMONIALS = [
   {
     name: "Sarah Chen",
     role: "Bookkeeper, Chen Accounting",
-    quote: "I used to spend my entire Monday morning entering invoices. Now I upload a stack, hit export, and I'm done before my coffee cools. DocPull paid for itself the first week.",
+    quote: "I used to spend my entire Monday morning entering invoices. Now I upload a stack, hit export, and I'm done before my coffee cools. DocumentPull paid for itself the first week.",
     avatar: "SC",
   },
   {
     name: "Marcus Rodriguez",
     role: "Owner, MR Construction",
-    quote: "We process 400+ supplier invoices a month. I was paying someone $18/hr to type them in. DocPull replaced that entire role for $149/month. Do the math.",
+    quote: "We process 400+ supplier invoices a month. I was paying someone $18/hr to type them in. DocumentPull replaced that entire role for $149/month. Do the math.",
     avatar: "MR",
   },
   {
     name: "Jessica Park",
     role: "Office Manager, Greenleaf Dental",
-    quote: "The accuracy is unreal — it reads handwritten receipts our old scanner couldn't handle. We tried 3 other tools before DocPull. Nothing else comes close.",
+    quote: "The accuracy is unreal — it reads handwritten receipts our old scanner couldn't handle. We tried 3 other tools before DocumentPull. Nothing else comes close.",
     avatar: "JP",
   },
 ];
@@ -111,7 +111,7 @@ const INTEGRATIONS = [
 const FAQS = [
   {
     q: "What file formats do you support?",
-    a: "DocPull accepts PDF, JPG, JPEG, PNG, WEBP, and TIFF files. Whether it's a clean digital invoice, a phone photo of a receipt, or a scanned multi-page document, we handle it all.",
+    a: "DocumentPull accepts PDF, JPG, JPEG, PNG, WEBP, and TIFF files. Whether it's a clean digital invoice, a phone photo of a receipt, or a scanned multi-page document, we handle it all.",
   },
   {
     q: "How accurate is the extraction?",
@@ -135,7 +135,7 @@ const FAQS = [
   },
   {
     q: "Do you integrate with my accounting software?",
-    a: "DocPull exports to Excel, CSV, and JSON formats that import directly into QuickBooks, Xero, FreshBooks, Wave, Sage, and virtually any accounting software. No plugins needed.",
+    a: "DocumentPull exports to Excel, CSV, and JSON formats that import directly into QuickBooks, Xero, FreshBooks, Wave, Sage, and virtually any accounting software. No plugins needed.",
   },
 ];
 
@@ -162,7 +162,7 @@ export default function LandingPage({ onGetStarted, onLogin }) {
         <div className="container landing-nav-inner">
           <div className="landing-logo">
             <div className="logo-icon"><FileText size={18} color="#fff" /></div>
-            <span className="logo-text">DocPull</span>
+            <span className="logo-text">DocumentPull</span>
           </div>
           <div className="landing-nav-actions">
             <button className="btn btn-ghost" onClick={onLogin}>Log In</button>
@@ -179,7 +179,7 @@ export default function LandingPage({ onGetStarted, onLogin }) {
             Still spending hours <span className="text-primary">typing invoice numbers</span> into spreadsheets?
           </h1>
           <p className="hero-subtitle">
-            Your bookkeeper spends 3 hours a day squinting at receipts and punching numbers. DocPull does it in 3 seconds — with 99% accuracy. Upload any invoice, get clean data back instantly.
+            Your bookkeeper spends 3 hours a day squinting at receipts and punching numbers. DocumentPull does it in 3 seconds — with 99% accuracy. Upload any invoice, get clean data back instantly.
           </p>
           <div className="hero-actions">
             <button className="btn btn-primary btn-lg" onClick={onGetStarted}>
@@ -249,7 +249,7 @@ export default function LandingPage({ onGetStarted, onLogin }) {
       <section className="features">
         <div className="container">
           <div className="section-header">
-            <h2 className="section-title">Why businesses switch to DocPull</h2>
+            <h2 className="section-title">Why businesses switch to DocumentPull</h2>
             <p className="section-subtitle">Manual data entry is the most hated office task. We eliminate it.</p>
           </div>
           <div className="features-grid">
@@ -366,7 +366,7 @@ export default function LandingPage({ onGetStarted, onLogin }) {
             </div>
             <h2 className="guarantee-title">The "5 Hours Saved" Guarantee</h2>
             <p className="guarantee-desc">
-              If DocPull doesn't save your team at least 5 hours in your first month, email us and we'll refund every penny. No questions asked. No hoops to jump through. We take the risk so you don't have to.
+              If DocumentPull doesn't save your team at least 5 hours in your first month, email us and we'll refund every penny. No questions asked. No hoops to jump through. We take the risk so you don't have to.
             </p>
             <div className="guarantee-badges">
               <span className="guarantee-badge"><Check size={14} /> 30-day money-back</span>
@@ -454,7 +454,7 @@ export default function LandingPage({ onGetStarted, onLogin }) {
         <div className="container">
           <div className="cta-card">
             <h2 className="cta-title">Every minute your team spends typing invoices is money wasted</h2>
-            <p className="cta-desc">4,800+ businesses already eliminated manual data entry with DocPull. You're one upload away from joining them.</p>
+            <p className="cta-desc">4,800+ businesses already eliminated manual data entry with DocumentPull. You're one upload away from joining them.</p>
             <button className="btn btn-primary btn-lg" onClick={onGetStarted}>
               Start Extracting Now <ArrowRight size={18} />
             </button>
@@ -468,7 +468,7 @@ export default function LandingPage({ onGetStarted, onLogin }) {
         <div className="container landing-footer-inner">
           <div className="landing-logo">
             <div className="logo-icon logo-icon-sm"><FileText size={13} color="#fff" /></div>
-            <span className="logo-text">DocPull</span>
+            <span className="logo-text">DocumentPull</span>
           </div>
           <div className="footer-links">
             <a href="#">Privacy</a>
@@ -476,7 +476,7 @@ export default function LandingPage({ onGetStarted, onLogin }) {
             <a href="#">Support</a>
             <a href="#">API Docs</a>
           </div>
-          <div className="footer-copy">&copy; 2026 DocPull. All rights reserved.</div>
+          <div className="footer-copy">&copy; 2026 DocumentPull. All rights reserved.</div>
         </div>
       </footer>
     </div>

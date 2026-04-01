@@ -312,7 +312,7 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
           <div className="logo-icon" style={{ width: 30, height: 30, borderRadius: 7 }}>
             <FileText size={15} color="#fff" />
           </div>
-          <span className="logo-text" style={{ fontSize: 17 }}>DocPull</span>
+          <span className="logo-text" style={{ fontSize: 17 }}>DocumentPull</span>
         </div>
 
         <nav className="dash-sidebar-nav">
