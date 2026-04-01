@@ -3,7 +3,7 @@ import {
   FileText, Upload, Download, Home, File, Settings,
   LogOut, Eye, Trash2, Check, RefreshCw, X,
   Clock, BarChart3, DollarSign, AlertCircle, Lock, CreditCard,
-  CheckCircle, XCircle, Loader2, Files, Zap,
+  CheckCircle, XCircle, Loader2, Files, Zap, TrendingUp,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
 import { exportToExcel, exportToCSV, exportAllToExcel } from '../export.js';
@@ -408,6 +408,8 @@ export default function Dashboard({ user, profile, onProfileUpdate, onLogout, on
                 )}
               </div>
 
+              {completedDocs.length >= 2 && <AnalyticsChart documents={documents} />}
+
               {documents.length > 0 && (
                 <div className="recent-section">
                   <h3 className="recent-title">Recent Extractions</h3>
@@ -673,6 +675,137 @@ function StatCard({ label, value, icon, color }) {
         <div className="stat-card-icon" style={{ background: bg, color: fg }}>{icon}</div>
       </div>
       <div className="stat-card-value">{value}</div>
+    </div>
+  );
+}
+
+function AnalyticsChart({ documents }) {
+  const completed = documents.filter((d) => d.status === 'completed' && d.uploadedAt);
+
+  // Group by day (last 14 days)
+  const now = new Date();
+  const days = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    days.push({ key, label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) });
+  }
+
+  const grouped = {};
+  const amounts = {};
+  days.forEach((d) => { grouped[d.key] = 0; amounts[d.key] = 0; });
+
+  completed.forEach((doc) => {
+    const key = new Date(doc.uploadedAt).toISOString().split('T')[0];
+    if (grouped[key] !== undefined) {
+      grouped[key]++;
+      amounts[key] += Number(doc.extraction?.total || 0);
+    }
+  });
+
+  const counts = days.map((d) => grouped[d.key]);
+  const totals = days.map((d) => amounts[d.key]);
+  const maxCount = Math.max(...counts, 1);
+  const maxAmount = Math.max(...totals, 1);
+
+  const chartW = 100; // percentage width
+  const chartH = 140;
+  const barWidth = 100 / days.length;
+
+  // Build sparkline for amounts
+  const points = totals.map((val, i) => {
+    const x = (i / (days.length - 1)) * 100;
+    const y = chartH - (val / maxAmount) * (chartH - 20) - 10;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div className="analytics-section">
+      <div className="analytics-header">
+        <h3 className="analytics-title"><TrendingUp size={16} /> Extraction Activity</h3>
+        <span className="analytics-period">Last 14 days</span>
+      </div>
+      <div className="analytics-grid">
+        {/* Bar chart - documents per day */}
+        <div className="card analytics-card">
+          <div className="analytics-card-label">Documents per Day</div>
+          <div className="analytics-chart-container">
+            <svg width="100%" height={chartH} viewBox={`0 0 ${days.length * 28} ${chartH}`} preserveAspectRatio="none">
+              {counts.map((count, i) => {
+                const barH = Math.max((count / maxCount) * (chartH - 30), count > 0 ? 4 : 0);
+                const x = i * 28 + 4;
+                const y = chartH - barH - 20;
+                return (
+                  <g key={i}>
+                    <rect
+                      x={x}
+                      y={y}
+                      width={20}
+                      height={barH}
+                      rx={3}
+                      fill={count > 0 ? 'var(--primary)' : 'var(--border)'}
+                      opacity={count > 0 ? 0.85 : 0.3}
+                    />
+                    {count > 0 && (
+                      <text x={x + 10} y={y - 4} textAnchor="middle" fill="var(--text-muted)" fontSize="9" fontWeight="600">
+                        {count}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+              {/* x-axis labels - show every other */}
+              {days.map((d, i) => (
+                i % 2 === 0 ? (
+                  <text key={`label-${i}`} x={i * 28 + 14} y={chartH - 4} textAnchor="middle" fill="var(--text-muted)" fontSize="8">
+                    {d.label.split(' ')[1]}
+                  </text>
+                ) : null
+              ))}
+            </svg>
+          </div>
+        </div>
+
+        {/* Sparkline - amount extracted per day */}
+        <div className="card analytics-card">
+          <div className="analytics-card-label">Amount Extracted per Day</div>
+          <div className="analytics-chart-container">
+            <svg width="100%" height={chartH} viewBox={`0 0 100 ${chartH}`} preserveAspectRatio="none">
+              {/* Area fill */}
+              <polygon
+                points={`0,${chartH - 10} ${points} 100,${chartH - 10}`}
+                fill="var(--green)"
+                opacity="0.08"
+              />
+              {/* Line */}
+              <polyline
+                points={points}
+                fill="none"
+                stroke="var(--green)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+              />
+              {/* Dots */}
+              {totals.map((val, i) => {
+                if (val === 0) return null;
+                const x = (i / (days.length - 1)) * 100;
+                const y = chartH - (val / maxAmount) * (chartH - 20) - 10;
+                return (
+                  <circle key={i} cx={x} cy={y} r="2.5" fill="var(--green)" stroke="#fff" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                );
+              })}
+            </svg>
+            <div className="analytics-sparkline-labels">
+              {days.filter((_, i) => i % 3 === 0).map((d, i) => (
+                <span key={i}>{d.label.split(' ')[1]}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

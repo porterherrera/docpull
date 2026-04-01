@@ -213,6 +213,20 @@ export default async function handler(req, res) {
         .eq('id', user.id);
     }
 
+    // Send email notification (fire and forget — don't block the response)
+    const origin = req.headers.origin || 'https://documentpull.com';
+    fetch(`${origin}/api/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: user.email,
+        fileName,
+        vendor: extractedData.vendor,
+        total: extractedData.total,
+        confidence,
+      }),
+    }).catch(() => {}); // Silently ignore notification errors
+
     return res.status(200).json({ success: true, data: extractedData, confidence, fileName });
   } catch (error) {
     console.error('Extraction error:', error.name, error.message);
