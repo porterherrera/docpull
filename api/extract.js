@@ -122,6 +122,7 @@ export default async function handler(req, res) {
     messageContent.push({ type: 'text', text: EXTRACTION_PROMPT });
 
     // Call Claude Vision
+    console.log('Calling Claude API. Key set:', !!process.env.ANTHROPIC_API_KEY, 'Media type:', mediaType);
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
@@ -186,7 +187,9 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ success: true, data: extractedData, confidence, fileName });
   } catch (error) {
-    console.error('Extraction error:', error);
+    console.error('Extraction error name:', error.name);
+    console.error('Extraction error message:', error.message);
+    console.error('Extraction error status:', error.status);
     return res.status(500).json({ error: 'Extraction failed', message: error.message });
   }
 }
