@@ -104,6 +104,11 @@ export default async function handler(req, res) {
       }
     }
 
+    // Check API key before calling Claude
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured on server' });
+    }
+
     // Build Claude message
     const messageContent = [];
 
@@ -187,9 +192,13 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ success: true, data: extractedData, confidence, fileName });
   } catch (error) {
-    console.error('Extraction error name:', error.name);
-    console.error('Extraction error message:', error.message);
-    console.error('Extraction error status:', error.status);
-    return res.status(500).json({ error: 'Extraction failed', message: error.message });
+    console.error('Extraction error:', error.name, error.message, error.status);
+    return res.status(500).json({
+      error: 'Extraction failed',
+      message: error.message,
+      name: error.name,
+      status: error.status,
+      apiKeySet: !!process.env.ANTHROPIC_API_KEY
+    });
   }
 }
