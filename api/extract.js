@@ -84,8 +84,11 @@ export default async function handler(req, res) {
       .single();
 
     if (profileError || !profile) {
-      return res.status(403).json({ error: 'Profile not found' });
+      console.error('Profile lookup failed:', profileError?.message, 'userId:', user.id);
+      return res.status(403).json({ error: 'Profile not found', details: profileError?.message });
     }
+
+    console.log('Profile found:', { plan: profile.plan, demo_remaining: profile.demo_remaining, docs_used: profile.docs_used_this_month });
 
     const limit = PLAN_LIMITS[profile.plan] || 1;
 
